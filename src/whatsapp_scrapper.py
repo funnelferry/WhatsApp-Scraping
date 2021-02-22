@@ -2,13 +2,16 @@
 Importing the libraries that we are going to use
 for loading the settings file and scraping the website
 """
-
+import csv
+import pdb
+import time
 from selenium import webdriver
 from selenium.common.exceptions import (NoSuchElementException,
                                         StaleElementReferenceException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.keys import Keys
 
 
 class WhatsappScrapper():
@@ -78,59 +81,78 @@ class WhatsappScrapper():
                 except Exception as e:
                     pass
 
-    def read_last_in_message(self):
+    def scroll_n_save(self, n):
         """
         Reading the last message that you got in from the chatter
+        Params:
+        n = number of scrolls to go above in chat
         """
+        i = 0
+
+        while(i<n):
+            chat_section = self.driver.find_element_by_xpath(
+                "//div[@aria-label='Message list. Press right arrow key on a message to open message context menu.']"
+            )
+            chat_section.send_keys(Keys.CONTROL + Keys.HOME)
+            time.sleep(2)
+            i = i+1
+
+        all_messages = []
+
         for messages in self.driver.find_elements_by_xpath(
-                "//div[contains(@class,'message-in')]"):
+        "//div[contains(@class,'message-in')] | //div[contains(@class,'message-out')]"):
+            final_message = ""
+            # get message text and emojis
             try:
                 message = ""
-                emojis = []
+                emojis = ""
 
                 message_container = messages.find_element_by_xpath(
                     ".//div[@class='copyable-text']")
-
+                
+                message_details = message_container.get_attribute("data-pre-plain-text").replace("]", ",").strip("[")
+                message_info = message_details.split(', ')
+                message_info[2] = message_info[2][:-2]
+                final_message += message_details
+                
                 message = message_container.find_element_by_xpath(
-                    ".//span[contains(@class,'selectable-text invisible-space copyable-text')]"
+                    ".//span[contains(@class,'selectable-text copyable-text')]"
                 ).text
-
+                final_message += message
+                
                 for emoji in message_container.find_elements_by_xpath(
-                        ".//img[contains(@class,'selectable-text invisible-space copyable-text')]"
+                    ".//img[contains(@class,'selectable-text copyable-text')]"
                 ):
-                    emojis.append(emoji.get_attribute("data-plain-text"))
-
+                    emojis += (emoji.get_attribute("data-plain-text"))
+                message += emojis
+                message_info.append(message)
+                all_messages.append(message_info)
+                    
             except NoSuchElementException:  # In case there are only emojis in the message
                 try:
                     message = ""
-                    emojis = []
+                    emojis = ""
                     message_container = messages.find_element_by_xpath(
-                        ".//div[contains(@class,'copyable-text')]")
-
+                        ".//div[@class='copyable-text']")
+                    # message_details = message_container.get_attribute("data-pre-plain-text").replace("]", " -").strip("[")
+                    message_details = message_container.get_attribute("data-pre-plain-text").replace("]", ",").strip("[")
+                    message_info = message_details.split(', ')
+                    message_info[2] = message_info[2][:-2]
+                    final_message += message_details
                     for emoji in message_container.find_elements_by_xpath(
-                            ".//img[contains(@class,'selectable-text invisible-space copyable-text')]"
+                            ".//img[contains(@class,'selectable-text copyable-text')]"
                     ):
-                        emojis.append(emoji.get_attribute("data-plain-text"))
+                        emojis += (emoji.get_attribute("data-plain-text"))
+                    message_info.append(emojis)
+                    all_messages.append(message_info)
                 except NoSuchElementException:
                     pass
-
-        return message, emojis
-
-    def send_message(self, text):
-        """
-        Send a message to the chatter.
-        You need to open a conversation with open_conversation()
-        before you can use this function.
-        """
-
-        input_text = self.driver.find_element_by_xpath(
-            "//div[@id='main']/footer/div/div[2]/div/div[@contenteditable='true']")
-
-        input_text.click()
-        input_text.send_keys(text)
-
-        send_button = self.driver.find_element_by_xpath(
-            "//div[@id='main']/footer/div/div[3]/button")
-        send_button.click()
-
-        return True
+        
+        fields = ['Timestamp', 'Date', 'SentBy', 'Message']
+        with open('GFG.csv', 'w') as f: 
+      
+            # using csv.writer method from CSV package 
+            write = csv.writer(f) 
+            
+            write.writerow(fields) 
+            write.writerows(all_messages) 
